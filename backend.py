@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from functools import lru_cache
 from itertools import product as iproduct
 
@@ -26,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
+from rdkit.Chem.Draw import rdMolDraw2D
 
 RDLogger.DisableLog("rdApp.*")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -174,9 +176,39 @@ class Node(BaseModel):
     category: str | None = None
     children: list["Node"] = []
     score: float | None = None  # rempli sur le noeud racine de chaque route
+    svg: str | None = None      # dépiction RDKit (structure dessinée) du noeud
 
 
 Node.model_rebuild()
+
+
+@lru_cache(maxsize=4096)
+def mol_svg(smiles: str) -> str | None:
+    """Dépiction SVG d'une molécule (rendu par RDKit, le moteur qui fait la chimie).
+    SVG rendu responsive : on retire width/height fixes, on garde le viewBox."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    drawer = rdMolDraw2D.MolDraw2DSVG(220, 160)
+    drawer.drawOptions().padding = 0.08
+    try:
+        rdMolDraw2D.PrepareAndDrawMolecule(drawer, mol)
+    except Exception:
+        return None
+    drawer.FinishDrawing()
+    svg = drawer.GetDrawingText()
+    i = svg.find("<svg")
+    if i > 0:
+        svg = svg[i:]
+    svg = re.sub(r"(<svg[^>]*?)\s+width=(['\"])[^'\"]*\2", r"\1", svg, count=1)
+    svg = re.sub(r"(<svg[^>]*?)\s+height=(['\"])[^'\"]*\2", r"\1", svg, count=1)
+    return svg
+
+
+def attach_svg(node: "Node") -> None:
+    node.svg = mol_svg(node.smiles)
+    for child in node.children:
+        attach_svg(child)
 
 
 def _cartesian(lists: list[list[Node]], cap: int) -> list[tuple[Node, ...]]:
@@ -278,8 +310,11 @@ def analyze_retro(req: RetroRequest) -> RetroResponse:
     logger.info("Cible %s : %d route(s), résolu=%s",
                 can, len(routes), any(is_solved(r) for r in routes))
 
-    return RetroResponse(target=can, solved=any(is_solved(r) for r in routes),
-                         routes=routes[:req.beam])
+    final = routes[:req.beam]
+    for r in final:
+        attach_svg(r)  # dessine chaque molécule (structure) avant l'envoi
+    return RetroResponse(target=can, solved=any(is_solved(r) for r in final),
+                         routes=final)
 
 
 @app.get("/health")
