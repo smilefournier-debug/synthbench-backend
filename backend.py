@@ -127,6 +127,122 @@ _RAW_RULES: dict[str, tuple[str, str, float, str]] = {
          "Activation", 0.92,
          "SOCl2 (reflux, dégagement HCl/SO2) ou (COCl)2 + DMF cat., CH2Cl2, T.A. — "
          "quasi quantitatif, réaction standard d'activation d'acide"),
+
+    # === VAGUE 1 : familles de fonctions supplémentaires (chaque SMIRKS testé
+    # avec RDKit sur molécules réelles avant intégration : compile + précurseurs
+    # chimiquement corrects). Toutes ont une synthèse inverse réelle. ===
+
+    # Nitrile : un acide (ou amide) peut provenir de l'hydrolyse d'un nitrile,
+    # lui-même souvent obtenu par substitution (R-X + CN⁻). Ouvre une voie vers
+    # des précurseurs plus courts d'un carbone.
+    "Hydrolyse de nitrile → acide carboxylique":
+        ("[C:1](=[O:2])[OH:3]>>[C:1]#[N:2]",
+         "Fonction C≡N", 0.70,
+         "nitrile + H2O, hydrolyse acide (H2SO4, reflux) ou basique (NaOH) — "
+         "le nitrile provient typiquement de R–X + NaCN"),
+
+    # Friedel-Crafts : une cétone aryle-alkyle se déconnecte en arène + chlorure
+    # d'acyle (acylation, pas d'alkylation — évite les réarrangements).
+    "Acylation de Friedel-Crafts (cétone aromatique)":
+        ("[c:1][C:2](=[O:3])[#6:4]>>[c:1][H].[Cl][C:2](=[O:3])[#6:4]",
+         "Aromatique", 0.78,
+         "arène + chlorure d'acyle, AlCl3 (≥1 équiv.), CH2Cl2 ou sans solvant, "
+         "0 °C → T.A. — acylation (pas d'alkylation, évite les réarrangements)"),
+
+    # Halogénure d'alkyle ← alcool : brique de substitution/Grignard, ramène à
+    # l'alcool correspondant (souvent en stock ou réductible).
+    "Halogénure d'alkyle ← alcool":
+        ("[CX4:1][Cl,Br,I:2]>>[CX4:1][OH]",
+         "Substitution", 0.80,
+         "alcool + SOCl2/PBr3 (ou HX) — accès à l'halogénure depuis l'alcool"),
+
+    # Nitration aromatique : Ar-NO2 vient de la nitration de l'arène nu.
+    "Nitration aromatique":
+        ("[c:1][N+:2](=[O:3])[O-:4]>>[c:1][H]",
+         "Aromatique", 0.85,
+         "arène + HNO3/H2SO4 (mélange sulfonitrique), 0–50 °C — "
+         "orientation dictée par les substituants présents"),
+
+    # Aniline ← réduction du nitro : voie d'accès classique à une aniline.
+    "Aniline ← réduction du groupe nitro":
+        ("[c:1][NH2:2]>>[c:1][N+](=O)[O-]",
+         "Aromatique", 0.88,
+         "nitroarène + H2/Pd-C, ou Fe/HCl, ou SnCl2 — réduction du nitro en amine"),
+
+    # Alcool primaire ← réduction d'acide/ester (alkyle et benzylique).
+    "Alcool primaire ← réduction d'acide/ester":
+        ("[#6:1][CH2:2][OH:3]>>[#6:1][C:2](=O)[OH]",
+         "Réduction", 0.75,
+         "acide carboxylique ou ester + LiAlH4 (THF, reflux) — réduction en "
+         "alcool primaire"),
+
+    # Alcool secondaire ← réduction de cétone (voie alternative au Grignard).
+    "Alcool secondaire ← réduction de cétone":
+        ("[#6:1][CH:2]([#6:4])[OH:3]>>[#6:1][C:2]([#6:4])=O",
+         "Réduction", 0.78,
+         "cétone + NaBH4 (MeOH, 0 °C → T.A.) ou LiAlH4 — réduction en alcool "
+         "secondaire"),
+
+    # Cétone/aldéhyde ← oxydation d'alcool (voie d'accès au carbonyle).
+    "Cétone/aldéhyde ← oxydation d'alcool":
+        ("[#6:1][C:2](=[O:3])[#6:4]>>[#6:1][CH:2]([OH])[#6:4]",
+         "Oxydation", 0.72,
+         "alcool + PCC/PDC (CH2Cl2) ou Swern ou Dess-Martin — oxydation ménagée "
+         "en carbonyle sans sur-oxydation"),
+
+    # === VAGUE 2 : substitutions, aromatiques électrophiles, redox complémentaires. ===
+
+    # Nitrile aliphatique ← substitution : R-CH2-CN vient de R-CH2-X + CN⁻.
+    # (Ne matche pas Ar-CN : correct, la SN2 ne s'applique pas sur aryle.)
+    "Nitrile ← substitution (R–X + cyanure)":
+        ("[CX4:1][C:2]#[N:3]>>[CX4:1][Cl].[C:2]#[N:3]",
+         "Substitution", 0.72,
+         "halogénure d'alkyle + NaCN/KCN, DMSO ou DMF, chauffage — homologation +1 C"),
+
+    # Éther aryl-alkyle : Williamson sur phénolate + halogénure d'alkyle.
+    "Éther aryl-alkyle (Williamson sur phénol)":
+        ("[c:1][O:2][CX4:3]>>[c:1][OH:2].[CX4:3][Br]",
+         "Substitution", 0.80,
+         "phénol + base (K2CO3) + halogénure d'alkyle, DMF/acétone, reflux (SN2)"),
+
+    # Halogénation aromatique électrophile : Ar-X ← Ar-H.
+    "Halogénation aromatique":
+        ("[c:1][Cl,Br:2]>>[c:1][H]",
+         "Aromatique", 0.82,
+         "arène + Cl2/Br2, catalyse FeX3 ou AlX3 — SEAr, orientation par les "
+         "substituants"),
+
+    # Sulfonation aromatique : Ar-SO3H ← Ar-H (réversible, utile comme groupe bloquant).
+    "Sulfonation aromatique":
+        ("[c:1][S:2](=[O:3])(=[O:4])[OH:5]>>[c:1][H]",
+         "Aromatique", 0.75,
+         "arène + H2SO4 fumant (SO3), chaud — réaction réversible, souvent "
+         "employée comme groupe bloquant temporaire"),
+
+    # Acide ← oxydation d'un alcool primaire (voie complémentaire à l'hydrolyse
+    # de nitrile et à la réduction).
+    "Acide carboxylique ← oxydation d'alcool primaire":
+        ("[#6:1][C:2](=[O:3])[OH:4]>>[#6:1][CH2:2][OH]",
+         "Oxydation", 0.74,
+         "alcool primaire + KMnO4 ou Jones (CrO3/H2SO4) — oxydation poussée "
+         "jusqu'à l'acide"),
+
+    # Alcène ← déshydratation d'un alcool (Zaitsev).
+    "Alcène ← déshydratation d'alcool":
+        ("[C:1]=[C:2]>>[C:1][C:2][OH]",
+         "Élimination", 0.68,
+         "alcool + H2SO4/H3PO4 conc., chaud (ou POCl3/pyridine) — élimination "
+         "E1, alcène le plus substitué (Zaitsev) favorisé"),
+
+    # Amine ← alkylation directe : fiabilité VOLONTAIREMENT basse — la
+    # mono-alkylation d'une amine par un halogénure est difficile à arrêter
+    # (suralkylation jusqu'à l'ammonium). Reste proposée mais jamais en tête ;
+    # l'amination réductrice (déjà présente) est la vraie voie recommandée.
+    "Amine ← alkylation directe (suralkylation probable)":
+        ("[#6:1][NH:2][CX4:3]>>[#6:1][NH2:2].[CX4:3][Br]",
+         "Substitution", 0.35,
+         "amine + halogénure d'alkyle — ATTENTION suralkylation difficile à "
+         "contrôler ; préférer l'amination réductrice quand c'est possible"),
 }
 
 RULES: dict[str, AllChem.ChemicalReaction] = {}
@@ -423,10 +539,18 @@ def _cartesian(lists: list[list[Node]], cap: int) -> list[tuple[Node, ...]]:
 
 
 def build_routes(can_smiles: str, max_depth: int, beam: int,
-                 ancestors: frozenset[str] = frozenset()) -> list[Node]:
-    in_stock, stock_source = is_building_block(can_smiles)
-    if in_stock:
-        return [Node(smiles=can_smiles, in_stock=True, stock_source=stock_source)]
+                 ancestors: frozenset[str] = frozenset(),
+                 is_root: bool = True) -> list[Node]:
+    # La CIBLE (racine) ne doit jamais être court-circuitée comme brique de
+    # base, même si elle est achetable (l'aspirine EST vendue, mais on veut
+    # quand même montrer sa rétrosynthèse). Le test stock ne s'applique donc
+    # qu'aux précurseurs (is_root=False). Sans ce garde, toute cible listée
+    # chez un fournisseur PubChem renvoyait "déjà une brique de base" et
+    # aucune voie -> exactement le bug observé sur aspirine/paracétamol/etc.
+    if not is_root:
+        in_stock, stock_source = is_building_block(can_smiles)
+        if in_stock:
+            return [Node(smiles=can_smiles, in_stock=True, stock_source=stock_source)]
     if max_depth <= 0 or can_smiles in ancestors:
         return [Node(smiles=can_smiles, in_stock=False)]
 
@@ -440,7 +564,7 @@ def build_routes(can_smiles: str, max_depth: int, beam: int,
                         key=lambda nc: -RULE_RELIABILITY.get(nc[0], 0.5))
 
     for name, precursors in candidates[:beam]:
-        per_precursor = [build_routes(p, max_depth - 1, beam, new_anc)
+        per_precursor = [build_routes(p, max_depth - 1, beam, new_anc, is_root=False)
                          for p in precursors]
         for combo in _cartesian(per_precursor, cap=beam):
             routes.append(Node(smiles=can_smiles, in_stock=False,
@@ -452,7 +576,13 @@ def build_routes(can_smiles: str, max_depth: int, beam: int,
         if len(routes) >= beam:
             break
 
-    return routes or [Node(smiles=can_smiles, in_stock=False)]
+    if routes:
+        return routes
+    # Aucune décomposition trouvée pour la cible. Si elle est elle-même une
+    # brique de base (petite molécule, ou achetable), on l'étiquette comme
+    # telle pour qu'elle reste "résolue" ; sinon feuille non résolue.
+    in_stock, stock_source = is_building_block(can_smiles)
+    return [Node(smiles=can_smiles, in_stock=in_stock, stock_source=stock_source)]
 
 
 def is_solved(node: Node) -> bool:
