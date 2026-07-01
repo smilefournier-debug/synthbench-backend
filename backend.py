@@ -128,6 +128,31 @@ _RAW_RULES: dict[str, tuple[str, str, float, str]] = {
          "SOCl2 (reflux, dégagement HCl/SO2) ou (COCl)2 + DMF cat., CH2Cl2, T.A. — "
          "quasi quantitatif, réaction standard d'activation d'acide"),
 
+    # === CLIVAGES BASIQUES (hydrolyse / aminolyse) ===
+    # NB : seules les bases FORTES (NaOH/KOH) et les nucléophiles azotés
+    # (amines, NH3) clivent réellement. Les carbonates (K2CO3, Na2CO3) et
+    # bicarbonates (NaHCO3) ne clivent PAS : ce sont des bases de réaction
+    # (déprotonation pour Williamson) ou de lavage — mentionnées en conditions
+    # des règles concernées, pas comme règles de clivage à part entière.
+
+    # Amide → acide + amine : hydrolyse (retour aux deux précurseurs séparés,
+    # plus petits). Conditions dures car l'amide est le dérivé d'acide le plus
+    # stable.
+    "Amide → acide + amine (hydrolyse)":
+        ("[C:1](=[O:2])[NX3:3]>>[C:1](=[O:2])[OH].[N:3]",
+         "Clivage", 0.60,
+         "amide + NaOH/KOH aqueux à reflux prolongé, OU H3O+ (H2SO4/HCl, Δ) — "
+         "hydrolyse dure ; l'amide est le carbonyle le plus résistant"),
+
+    # Amide ← aminolyse d'un ester : voie DOUCE de formation d'amide, un ester
+    # réagit avec une amine (ex. éthanolamine) -> amide + alcool. En rétro,
+    # l'amide peut donc venir d'un ester + amine.
+    "Amide ← aminolyse d'ester (amine + ester)":
+        ("[C:1](=[O:2])[NX3:3]>>[C:1](=[O:2])OC.[N:3]",
+         "Clivage", 0.58,
+         "ester + amine (ex. éthanolamine, NH3, amine 1aire/2aire), chauffage "
+         "modéré, sans catalyseur — aminolyse ; plus doux que via chlorure d'acyle"),
+
     # === VAGUE 1 : familles de fonctions supplémentaires (chaque SMIRKS testé
     # avec RDKit sur molécules réelles avant intégration : compile + précurseurs
     # chimiquement corrects). Toutes ont une synthèse inverse réelle. ===
@@ -180,8 +205,53 @@ _RAW_RULES: dict[str, tuple[str, str, float, str]] = {
     "Alcool secondaire ← réduction de cétone":
         ("[#6:1][CH:2]([#6:4])[OH:3]>>[#6:1][C:2]([#6:4])=O",
          "Réduction", 0.78,
-         "cétone + NaBH4 (MeOH, 0 °C → T.A.) ou LiAlH4 — réduction en alcool "
-         "secondaire"),
+         "cétone + NaBH4 (MeOH, 0 °C → T.A. ; doux, sélectif du carbonyle) "
+         "ou LiAlH4 — réduction en alcool secondaire"),
+
+    # === RÉDUCTIONS DIFFÉRENCIÉES PAR SÉLECTIVITÉ DU RÉDUCTEUR ===
+    # Chaque source d'hydrure ne touche que certaines fonctions ; on encode
+    # la fonction ET le réducteur adapté, testé RDKit avant intégration.
+
+    # Amine ← réduction d'amide par LiAlH4 (NaBH4 ne réduit PAS l'amide).
+    # C=O de l'amide entièrement retiré -> CH2-N.
+    "Amine ← réduction d'amide (LiAlH4)":
+        ("[#6:1][CH2:2][NX3:3]>>[#6:1][C:2](=O)[N:3]",
+         "Réduction", 0.70,
+         "amide + LiAlH4 (THF, reflux) — réduction complète C=O → CH2 ; "
+         "NaBH4 est INEFFICACE sur les amides"),
+
+    # Amine primaire ← réduction de nitrile par LiAlH4 (homologation : R-CN
+    # donne R-CH2-NH2, +1 carbone). Voie complémentaire de l'hydrolyse du nitrile.
+    "Amine primaire ← réduction de nitrile (LiAlH4)":
+        ("[#6:1][CH2:2][NH2:3]>>[#6:1][C:2]#[N:3]",
+         "Réduction", 0.70,
+         "nitrile + LiAlH4 (THF) ou H2/Ni Raney — réduction en amine primaire "
+         "(+1 C par rapport au substrat du nitrile)"),
+
+    # Aldéhyde ← réduction PARTIELLE d'ester par DIBAL-H à froid (s'arrête à
+    # l'aldéhyde, ne va pas jusqu'à l'alcool si 1 équiv à -78 °C).
+    "Aldéhyde ← réduction partielle d'ester (DIBAL-H)":
+        ("[#6:1][CH:2]=[O:3]>>[#6:1][C:2](=[O:3])OC",
+         "Réduction", 0.60,
+         "ester + DIBAL-H (1 équiv, toluène, -78 °C) — s'arrête à l'aldéhyde ; "
+         "contrôle strict de T° et stœchiométrie requis"),
+
+    # Méthylène ← désoxygénation totale d'une cétone aryle (Clemmensen en
+    # milieu acide OU Wolff-Kishner en milieu basique). C=O -> CH2.
+    "Méthylène ← désoxygénation de cétone (Clemmensen / Wolff-Kishner)":
+        ("[c:1][CH2:2][#6:3]>>[c:1][C:2](=O)[#6:3]",
+         "Réduction", 0.66,
+         "cétone → CH2 : Clemmensen (Zn-Hg, HCl conc. — substrats stables en "
+         "acide) OU Wolff-Kishner (N2H4 puis KOH, Δ — substrats stables en base)"),
+
+    # Alcane ← hydrogénation d'un alcène, RESTREINTE au cas benzylique
+    # (styrène-like) : la version générique [CX4][CX4] matcherait toute liaison
+    # C–C et générerait un bruit d'alcènes absurdes (vérifié sur l'ibuprofène).
+    "Alcène benzylique ← (précède hydrogénation H2/Pd)":
+        ("[c:0][CX4:1][CX4H2,CX4H3:2]>>[c:0][C:1]=[C:2]",
+         "Réduction", 0.55,
+         "alcène (styrénique) + H2/Pd-C, 1 atm → alcane ; en rétro, ce carbone "
+         "benzylique peut provenir d'un alcène conjugué à l'arène"),
 
     # Cétone/aldéhyde ← oxydation d'alcool (voie d'accès au carbonyle).
     "Cétone/aldéhyde ← oxydation d'alcool":
@@ -243,6 +313,29 @@ _RAW_RULES: dict[str, tuple[str, str, float, str]] = {
          "Substitution", 0.35,
          "amine + halogénure d'alkyle — ATTENTION suralkylation difficile à "
          "contrôler ; préférer l'amination réductrice quand c'est possible"),
+
+    # === VAGUE 3 : chimie du nitro (voies aldéhyde → nitroalcène → amine). ===
+
+    # Amine primaire ← réduction d'un nitroalcène. Ouvre la voie "aldéhyde +
+    # nitroalcane" classique (ex. amphétamine ← phényl-2-nitropropène). La
+    # réduction (LiAlH4, ou H2/cat., ou Zn/HCl, ou Al-Hg) réduit à la fois la
+    # double liaison C=C et le groupe NO2 en NH2. Fiabilité modérée : la
+    # position de la double liaison régénérée n'est pas unique (le moteur peut
+    # proposer 2 régiochimies de nitroalcène ; le chimiste tranche).
+    "Amine primaire ← réduction de nitroalcène":
+        ("[CX4:1][CX4:2][NH2:3]>>[C:1]=[C:2][N+](=O)[O-]",
+         "Réduction", 0.62,
+         "nitroalcène + réducteur (LiAlH4 THF ; ou H2/Pd ; ou Zn ou Al-Hg) — "
+         "réduit simultanément C=C et NO2→NH2"),
+
+    # Nitroalcène ← condensation de Henry (nitroaldol déshydraté) : aldéhyde +
+    # nitroalcane. Les nitroalcanes courts (nitrométhane, nitroéthane) sont des
+    # briques de base commerciales.
+    "Nitroalcène ← condensation de Henry (aldéhyde + nitroalcane)":
+        ("[c,C:1][CH:2]=[C:3][N+:4](=[O:5])[O-:6]>>[c,C:1][CH:2]=[O].[CH2:3][N+:4](=[O:5])[O-:6]",
+         "C–C", 0.68,
+         "aldéhyde + nitroalcane, base catalytique (amine, NH4OAc), puis "
+         "déshydratation — condensation de Henry / nitroaldol"),
 }
 
 RULES: dict[str, AllChem.ChemicalReaction] = {}
@@ -319,6 +412,8 @@ _DEFAULT_STOCK = [
     "O=C(O)c1ccc(N)cc1",                                    # ac. 4-aminobenzoïque (forme explicite, doublon volontaire)
     "O=C(O)c1ccc(C)cc1", "O=C(O)c1ccc(Cl)cc1",              # ac. 4-méthyl/4-chlorobenzoïque
     "CCOc1ccccc1", "COc1ccccc1", "Nc1ccc(N)cc1",            # phénétole, anisole, p-phénylènediamine
+    "C[N+](=O)[O-]", "CC[N+](=O)[O-]",                      # nitrométhane, nitroéthane (briques de Henry)
+    "O=Cc1ccccc1", "O=CCc1ccccc1",                          # benzaldéhyde, phénylacétaldéhyde
 ]
 for _s in _DEFAULT_STOCK:
     _c = canonical(_s)
@@ -571,13 +666,31 @@ def build_routes(can_smiles: str, max_depth: int, beam: int,
                                reaction=name, category=RULE_CATEGORY.get(name),
                                conditions=RULE_CONDITIONS.get(name),
                                children=list(combo)))
-            if len(routes) >= beam:
+    # On génère PLUS large que beam (jusqu'à un plafond), sans couper sur la
+    # simple position : une voie réaliste mais issue d'une règle tardive (ex.
+    # condensation de Henry) ne doit pas être éliminée juste parce que des
+    # règles plus prioritaires ont déjà rempli le quota. On assemble un vivier,
+    # puis on garde les `beam` MEILLEURES au score.
+    gen_cap = max(beam * 3, 12)  # vivier plus large que le beam final
+    for name, precursors in candidates:
+        per_precursor = [build_routes(p, max_depth - 1, beam, new_anc, is_root=False)
+                         for p in precursors]
+        for combo in _cartesian(per_precursor, cap=beam):
+            routes.append(Node(smiles=can_smiles, in_stock=False,
+                               reaction=name, category=RULE_CATEGORY.get(name),
+                               conditions=RULE_CONDITIONS.get(name),
+                               children=list(combo)))
+            if len(routes) >= gen_cap:
                 break
-        if len(routes) >= beam:
+        if len(routes) >= gen_cap:
             break
 
     if routes:
-        return routes
+        # Garder les beam meilleures au score (résolu + en stock + court), pas
+        # les premières générées. C'est ce qui fait remonter les voies qui
+        # aboutissent réellement à des briques, où qu'elles soient dans l'ordre.
+        routes.sort(key=score_route, reverse=True)
+        return routes[:beam]
     # Aucune décomposition trouvée pour la cible. Si elle est elle-même une
     # brique de base (petite molécule, ou achetable), on l'étiquette comme
     # telle pour qu'elle reste "résolue" ; sinon feuille non résolue.
@@ -602,6 +715,18 @@ def route_signature(node: Node):
             tuple(route_signature(c) for c in node.children))
 
 
+def count_leaves_in_stock(node: Node) -> tuple[int, int]:
+    """(feuilles en stock, feuilles totales) — mesure à quel point une route
+    aboutit réellement à des briques disponibles."""
+    if not node.children:
+        return (1 if node.in_stock else 0, 1)
+    si = ti = 0
+    for c in node.children:
+        s, t = count_leaves_in_stock(c)
+        si += s; ti += t
+    return si, ti
+
+
 def score_route(node: Node) -> float:
     rel = 1.0
     stack = [node]
@@ -610,9 +735,21 @@ def score_route(node: Node) -> float:
         if n.reaction:
             rel *= RULE_RELIABILITY.get(n.reaction, 0.5)
         stack.extend(n.children)
-    solved_factor = 1.0 if is_solved(node) else 0.3
-    length_factor = 0.9 ** route_depth(node)
-    return round(max(0.0, min(1.0, rel * solved_factor * length_factor)), 3)
+    solved = is_solved(node)
+    # Une route entièrement résolue vaut BEAUCOUP plus qu'une route partielle :
+    # c'est le critère n°1 (on veut des voies qui aboutissent à des briques
+    # réelles). Une route partielle est fortement pénalisée.
+    solved_factor = 1.0 if solved else 0.25
+    # Bonus supplémentaire proportionnel à la fraction de feuilles réellement
+    # en stock : départage deux routes résolues en faveur de celle dont les
+    # précurseurs sont plus concrètement disponibles.
+    si, ti = count_leaves_in_stock(node)
+    stock_frac = si / ti if ti else 0.0
+    stock_bonus = 0.7 + 0.3 * stock_frac
+    # Pénalité de longueur douce (les voies courtes sont préférées, mais une
+    # voie longue entièrement résolue reste meilleure qu'une courte en impasse).
+    length_factor = 0.92 ** route_depth(node)
+    return round(max(0.0, min(1.0, rel * solved_factor * stock_bonus * length_factor)), 3)
 
 
 # Les conditions affichées (champ `conditions` de chaque Node) sont des
